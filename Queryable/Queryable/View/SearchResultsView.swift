@@ -19,7 +19,7 @@ struct SearchResultsView: View {
     
     var body: some View {
         switch photoSearcher.searchResultCode {
-        case SEARCH_RESULT_CODE.DEFAULT.rawValue:
+        case .DEFAULT:
             ProgressView() {
                 Text("Loading Model...")
             }
@@ -35,9 +35,9 @@ struct SearchResultsView: View {
                     }
                 }
             }
-        case SEARCH_RESULT_CODE.MODEL_PREPARED.rawValue:
+        case .MODEL_PREPARED:
             Text("")
-        case SEARCH_RESULT_CODE.IS_SEARCHING.rawValue:
+        case .IS_SEARCHING:
             // Searching...
             ProgressView() {
                 Text("Searching...")
@@ -45,11 +45,11 @@ struct SearchResultsView: View {
                     .accessibilityValue(Text("Searching"))
             }
             .padding(.top, -UIScreen.main.bounds.height * 0.65)
-        case SEARCH_RESULT_CODE.NEVER_INDEXED.rawValue:
+        case .NEVER_INDEXED:
             // User never searched before
             FirstTimeSearchView(photoSearcher: photoSearcher)
             
-        case SEARCH_RESULT_CODE.NO_RESULT.rawValue:
+        case .NO_RESULT:
             // Really no result
             VStack {
                 Text("No photos matched your query.")
@@ -61,7 +61,7 @@ struct SearchResultsView: View {
                 Spacer()
             }
             .padding(.top, -UIScreen.main.bounds.height * 0.3)
-        case SEARCH_RESULT_CODE.HAS_RESULT.rawValue:
+        case .HAS_RESULT:
             // Has result
             VStack {
                 if photoSearcher.totalUnIndexedPhotosNum > 0 {
@@ -87,9 +87,6 @@ struct SearchResultsView: View {
                 Spacer()
             }
             .padding(.top, -UIScreen.main.bounds.height * 0.32)
-            
-        default:
-            Text("")
         }
     }
     
@@ -102,27 +99,9 @@ struct FirstTimeSearchView: View {
     var body: some View {
         VStack {
             VStack {
-    
-//                Text("No results, it seems to be your first search.")
-//                    .foregroundColor(.gray)
-//                    .scaledToFill()
-//                    .minimumScaleFactor(0.5)
-//                    .lineLimit(1)
                 
-                if UIDevice.modelIsValid == true {
-                    TipsView(photoSearcher: photoSearcher)
-
-                    Spacer(minLength: 100)
-                } else {
-                    Text("Sorry, Queryable does not support iPhone X/Xr/Xs, please request a refund.")
-                        .foregroundColor(.gray)
-                    
-                    Link(destination: URL(string: "https://support.apple.com/en-us/HT204084")!, label: {
-                          Label("Go", systemImage: "network")
-                        })
-
-                    Spacer(minLength: 100)
-                }
+                TipsView(photoSearcher: photoSearcher)
+                Spacer(minLength: 100)
                 
             }
             
@@ -232,13 +211,13 @@ struct TipsView: View {
             NavigationLink(destination: BuildIndexView(photoSearcher: photoSearcher)
                 .onAppear {
                     Task {
-                        photoSearcher.buildIndexCode = BUILD_INDEX_CODE.PHOTOS_LOADED.rawValue
+                        photoSearcher.buildIndexCode = .PHOTOS_LOADED
                         await photoSearcher.fetchPhotos()
-                        photoSearcher.buildIndexCode = BUILD_INDEX_CODE.PHOTOS_LOADED.rawValue
+                        photoSearcher.buildIndexCode = .PHOTOS_LOADED
                     }
                 }
                 .onDisappear {
-                    photoSearcher.buildIndexCode = BUILD_INDEX_CODE.DEFAULT.rawValue
+                    photoSearcher.buildIndexCode = .DEFAULT
                 }
             ) {
                 HStack {
@@ -294,7 +273,19 @@ struct SearchResultsView_Previews: PreviewProvider {
 import UIKit
 
 public extension UIDevice {
+    static func chipIsA13OrLater() -> Bool {
+        let devicePattern = /(AppleTV|iPad|iPhone|Watch|iPod)(\d+),(\d+)/
+        
+        if let match = current.model.firstMatch(of: devicePattern) {
+            let deviceModel = match.1
+            let majorRevision = Int(match.2)!
+            
+            return (deviceModel == "iPhone" || deviceModel == "iPad") && majorRevision >= 12
+        }
 
+        return false
+    }
+    
     static let modelIsValid: Bool = {
         var systemInfo = utsname()
         uname(&systemInfo)
@@ -304,22 +295,18 @@ public extension UIDevice {
             return identifier + String(UnicodeScalar(UInt8(value)))
         }
 
-        func isDeviceValid(identifier: String) -> Bool { // swiftlint:disable:this cyclomatic_complexity
-            #if os(iOS)
-            switch identifier {
-            case "iPhone10,3", "iPhone10,6":                      return false // "iPhone X"
-            case "iPhone11,2":                                    return false // "iPhone XS"
-            case "iPhone11,4", "iPhone11,6":                      return  false // "iPhone XS Max"
-            case "iPhone11,8":                                    return false // "iPhone XR"
-            default:                                              return true
-            }
-            #elseif os(tvOS)
+        
+        func isDeviceValid(identifier: String) -> Bool {
+            // swiftlint:disable:this cyclomatic_complexity
+            #if os(tvOS)
             switch identifier {
             case "AppleTV5,3": return false
             case "AppleTV6,2": return false
             case "i386", "x86_64": return false
             default: return false
             }
+            #elseif os(iOS)
+            return true
             #endif
         }
 

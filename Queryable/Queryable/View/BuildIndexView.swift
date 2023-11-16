@@ -13,16 +13,15 @@ struct BuildIndexView: View {
 
     var body: some View {
         switch photoSearcher.buildIndexCode {
-        case BUILD_INDEX_CODE.DEFAULT.rawValue:
+        case .DEFAULT:
             Text("")
-        case BUILD_INDEX_CODE.LOADING_PHOTOS.rawValue:
+        case .LOADING_PHOTOS:
             ProgressView() {
                 Text("Loading Photos...")
             }
-        case BUILD_INDEX_CODE.PHOTOS_LOADED.rawValue:
+        case .PHOTOS_LOADED:
             StartBuildView(photoSearcher: photoSearcher)
-            
-        case BUILD_INDEX_CODE.LOADING_MODEL.rawValue:
+        case .LOADING_MODEL:
             ProgressView() {
                 Text("Loading Model...")
             }
@@ -31,7 +30,7 @@ struct BuildIndexView: View {
                     await photoSearcher.loadImageIncoder()
                 }
             }
-        case BUILD_INDEX_CODE.IS_BUILDING_INDEX.rawValue:
+        case .IS_BUILDING_INDEX:
             BuildingIndexView(photoSearcher: photoSearcher)
                 .onAppear {
                     Task {
@@ -40,13 +39,11 @@ struct BuildIndexView: View {
                         UIApplication.shared.isIdleTimerDisabled = false
                     }
                 }
-        case BUILD_INDEX_CODE.BUILD_FINISHED.rawValue:
+        case .BUILD_FINISHED:
             BuildFinishView(photoSearcher: photoSearcher)
         default:
             Text("")
-            
         }
-        
     }
 }
 
@@ -54,6 +51,10 @@ struct BuildIndexView: View {
 struct StartBuildView: View {
     @Environment(\.colorScheme) var colorScheme
     @ObservedObject var photoSearcher: PhotoSearcher
+    
+    var isDarkMode: Bool {
+        return colorScheme == .dark
+    }
     
     var body: some View {
         VStack {
@@ -74,30 +75,20 @@ struct StartBuildView: View {
             }
             
             HStack {
-                if colorScheme == .dark {
-                    Text("Index Photos")
-                        .font(.title)
-                        .padding()
-                        .frame(minWidth: 200)
-                        .foregroundColor(.black)
-                        .background(Color.white)
-                        .cornerRadius(40)
-                } else {
-                    Text("Index Photos")
-                        .font(.title)
-                        .padding()
-                        .frame(minWidth: 200)
-                        .foregroundColor(.white)
-                        .background(Color.black)
-                        .cornerRadius(40)
-                }
+                Text("Index Photos")
+                    .font(.title)
+                    .padding()
+                    .frame(minWidth: 200)
+                    .foregroundColor(isDarkMode ? .black : .white)
+                    .background(isDarkMode ? .white : .black)
+                    .cornerRadius(40)
             }
             .accessibilityHint("Press button to build index for all your photos, this may takes a few minutes, depending on the number of your unindexed photos")
             .onTapGesture {
                 if photoSearcher.totalUnIndexedPhotosNum > 0 {
-                    photoSearcher.changeState(from: BUILD_INDEX_CODE.PHOTOS_LOADED.rawValue, to: BUILD_INDEX_CODE.LOADING_MODEL.rawValue)
+                    photoSearcher.changeState(from: .PHOTOS_LOADED, to: .LOADING_MODEL)
                 } else {
-                    photoSearcher.changeState(from: BUILD_INDEX_CODE.PHOTOS_LOADED.rawValue, to: BUILD_INDEX_CODE.BUILD_FINISHED.rawValue)
+                    photoSearcher.changeState(from: .PHOTOS_LOADED, to: .BUILD_FINISHED)
                 }
             }
         }
@@ -131,36 +122,30 @@ struct BuildFinishView: View {
     @Environment(\.colorScheme) var colorScheme
     @ObservedObject var photoSearcher: PhotoSearcher
     
+    var isDarkMode: Bool {
+        return colorScheme == .dark
+    }
+    
     var body: some View {
         VStack {
             Text("Build Finished.")
                 .accessibilityHint(Text("All photos have been indexed"))
             HStack {
-                if colorScheme == .dark {
-                    Text("Start Search")
-                        .font(.title)
-                        .padding()
-                        .frame(minWidth: 200)
-                        .foregroundColor(.black)
-                        .background(Color.white)
-                        .cornerRadius(40)
-                } else {
-                    Text("Start Search")
-                        .font(.title)
-                        .padding()
-                        .frame(minWidth: 200)
-                        .foregroundColor(.white)
-                        .background(Color.black)
-                        .cornerRadius(40)
-                }
+                Text("Start Search")
+                    .font(.title)
+                    .padding()
+                    .frame(minWidth: 200)
+                    .foregroundColor(isDarkMode ? .black : .white)
+                    .background(isDarkMode ? .white : .black)
+                    .cornerRadius(40)
             }
             .accessibilityHint(Text("All photos have been indexed, click to search"))
             .onTapGesture {
                 self.presentationMode.wrappedValue.dismiss()
-                self.photoSearcher.searchResultCode = SEARCH_RESULT_CODE.MODEL_PREPARED.rawValue
-                if !self.photoSearcher.searchString.elementsEqual("") {
+                self.photoSearcher.searchResultCode = .MODEL_PREPARED
+                if !self.photoSearcher.searchString.isEmpty {
                     Task {
-                        self.photoSearcher.searchResultCode = SEARCH_RESULT_CODE.IS_SEARCHING.rawValue
+                        self.photoSearcher.searchResultCode = .IS_SEARCHING
                         await self.photoSearcher.search(with: self.photoSearcher.searchString)
                     }
                 }

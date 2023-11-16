@@ -41,12 +41,11 @@ class PhotoSearcher: ObservableObject {
     let KEY_HAS_ACCESS_TO_PHOTOS = "KEY_HAS_ACCESS_TO_PHOTOS"
     
     // -3: default, -2: Is searching now, -1: Never indexed. 0: No result. 1: Has result.
-    @Published var searchResultCode: Int = SEARCH_RESULT_CODE.DEFAULT.rawValue
-    @Published var buildIndexCode: Int = BUILD_INDEX_CODE.DEFAULT.rawValue
+    @Published var searchResultCode: SEARCH_RESULT_CODE = .DEFAULT
+    @Published var buildIndexCode: BUILD_INDEX_CODE = .DEFAULT
     @Published var totalUnIndexedPhotosNum: Int = -1
     @Published var curIndexingNums: Int = -1
     @Published var curShowingPhoto: UIImage = UIImage(systemName: "photo")!
-//    @Published var searchResultPhoto: UIImage = UIImage(systemName: "photo")!
     
     @Published var isFindingSimilarPhotos = false
     @Published var similarPhotoAssets = [PhotoAsset]()
@@ -78,7 +77,7 @@ class PhotoSearcher: ObservableObject {
         self.TOPK_SIM = defaultTOPK_SIM
     }
     
-    func changeState(from statusCode1: Int, to statusCode2: Int) {
+    func changeState(from statusCode1: BUILD_INDEX_CODE, to statusCode2: BUILD_INDEX_CODE) {
         if self.buildIndexCode == statusCode1 {
             self.buildIndexCode = statusCode2
         }
@@ -90,14 +89,14 @@ class PhotoSearcher: ObservableObject {
         clearCache()
         print("Cache cleared.")
         
-        self.searchResultCode = SEARCH_RESULT_CODE.DEFAULT.rawValue
+        self.searchResultCode = .DEFAULT
         print("Loading text encoder..")
         self.photoSearchModel.load_text_encoder()
         print("Text encoder loaded.")
         if self.loadEmbeddingsData(fileName: self.EMBEDDING_DATA_NAME) {
             print("Text embedding loaded. total \(self.savedEmbedding.count)")
         } else {
-            self.searchResultCode = SEARCH_RESULT_CODE.NEVER_INDEXED.rawValue
+            self.searchResultCode = .NEVER_INDEXED
             print("Load text embedding failure.")
         }
         
@@ -106,20 +105,19 @@ class PhotoSearcher: ObservableObject {
         
         // Get the current authorization state.
         let status = PHPhotoLibrary.authorizationStatus()
-        if (status == PHAuthorizationStatus.authorized) {
+        if (status == .authorized) {
             // Access has been granted.
             defaults.set(true, forKey: self.KEY_HAS_ACCESS_TO_PHOTOS)
             print("KEY_HAS_ACCESS_TO_PHOTOS has been updated to true.")
         }
         
-        if self.savedEmbedding.count > 0 {
-            self.searchResultCode = SEARCH_RESULT_CODE.MODEL_PREPARED.rawValue
+        if !self.savedEmbedding.isEmpty {
+            self.searchResultCode = .MODEL_PREPARED
         }
-        
     }
     
     func fetchPhotos() async {
-        self.buildIndexCode = BUILD_INDEX_CODE.LOADING_PHOTOS.rawValue
+        self.buildIndexCode = .LOADING_PHOTOS
         
         // set network authorization
         await self.photoCollection.cache.requestOptions.isNetworkAccessAllowed = false
@@ -147,13 +145,13 @@ class PhotoSearcher: ObservableObject {
             }
             
             if self.totalPhotosNum > 0 {
-                self.buildIndexCode = BUILD_INDEX_CODE.PHOTOS_LOADED.rawValue
+                self.buildIndexCode = .PHOTOS_LOADED
             }
         }
     }
     
     func loadImageIncoder() async {
-        self.buildIndexCode = BUILD_INDEX_CODE.LOADING_MODEL.rawValue
+        self.buildIndexCode = .LOADING_MODEL
         guard let path = Bundle.main.path(forResource: "CoreMLModels", ofType: nil, inDirectory: nil) else {
             fatalError("Fatal error: failed to find the CoreML models.")
         }
@@ -166,12 +164,11 @@ class PhotoSearcher: ObservableObject {
                 // 8.542439937591553 seconds used for loading img encoder
                 print("\(startingTime.timeIntervalSinceNow * -1) seconds used for loading img encoder")
                 self.imageEncoder = imgEncoder
-                self.buildIndexCode = BUILD_INDEX_CODE.MODEL_LOADED.rawValue
-                self.buildIndexCode = BUILD_INDEX_CODE.IS_BUILDING_INDEX.rawValue
+                self.buildIndexCode = .MODEL_LOADED
+                self.buildIndexCode = .IS_BUILDING_INDEX
             } catch let error {
                 logger.error("Failed to load model: \(error.localizedDescription)")
             }
-            
         }
     }
     
@@ -280,7 +277,6 @@ class PhotoSearcher: ObservableObject {
         self.unIndexedPhotos = [PhotoAsset]()
         let startingTime = Date()
         
-//        for idx in 1300..<1450 {
         for idx in 0..<self.photoCollection.photoAssets.count {
             let _cur_asset = self.photoCollection.photoAssets[idx]
             
@@ -338,7 +334,10 @@ class PhotoSearcher: ObservableObject {
         
         final_all_results = [Embedding]()
     }
-    
+
+    /**
+     Build index
+     */
     func buildIndex() async {
         self.buildingEmbedding = [String: MLMultiArray]()
         
@@ -376,7 +375,7 @@ class PhotoSearcher: ObservableObject {
         // delete large memory usage
         self.buildingEmbedding = [String: MLMultiArray]()
         self.imageEncoder = nil
-        self.buildIndexCode = BUILD_INDEX_CODE.BUILD_FINISHED.rawValue
+        self.buildIndexCode = .BUILD_FINISHED
         self.totalUnIndexedPhotosNum = 0
         
         clearCache()
@@ -434,19 +433,19 @@ class PhotoSearcher: ObservableObject {
         self.searchString = query
         self.searchResultPhotoAssets = [PhotoAsset]()
         
-        self.searchResultCode = SEARCH_RESULT_CODE.IS_SEARCHING.rawValue
+        self.searchResultCode = .IS_SEARCHING
         Task {
             do {
-                if self.savedEmbedding.count == 0 {
+                if self.savedEmbedding.isEmpty {
                     print("Never indexed.")
-                    self.searchResultCode = SEARCH_RESULT_CODE.NEVER_INDEXED.rawValue
+                    self.searchResultCode = .NEVER_INDEXED
                 } else {
                     // search from indexed result
                     print("Has indexed data, now begin to search.")
                     print("Test if I can fetch all photos: \(self.photoCollection.photoAssets.count)")
                     
                     // Filter whether Photo has been deleted.
-                    if self.allPhotosId.count > 0 {
+                    if !self.allPhotosId.isEmpty {
                         let startingTime = Date()
                         
                         var cnt = 0
@@ -500,8 +499,7 @@ class PhotoSearcher: ObservableObject {
                     }
                     print("\(startingTime3.timeIntervalSinceNow * -1) seconds used for download top\(FINAL_TOP_K) sim images.")
                     
-                    
-                    self.searchResultCode = SEARCH_RESULT_CODE.HAS_RESULT.rawValue
+                    self.searchResultCode = .HAS_RESULT
                 }
                 
             } catch let error {
@@ -512,7 +510,7 @@ class PhotoSearcher: ObservableObject {
     
     
     /**
-     Search Part
+     Similarity ranking
      */
     func similarPhoto(with photoAsset: PhotoAsset) async {
         self.isFindingSimilarPhotos = true
@@ -583,13 +581,12 @@ class PhotoSearcher: ObservableObject {
         self.emb_sim_dict = [String: Float32]()
         try await withThrowingTaskGroup(of: Void.self) { group in
             for emb_dict in img_embs_dict_lst {
-                if emb_dict.count > 0 {
+                if !emb_dict.isEmpty {
                     group.addTask {
                         for key in emb_dict.keys {
                             let cur_img_emb = emb_dict[key]
                             await self.computeSingleEmbeddingSim(text_emb: text_emb, img_emb: cur_img_emb!, img_id: key)
-                        }
-                        
+                        } 
                     }
                 }
             }
